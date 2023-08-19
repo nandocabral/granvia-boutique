@@ -19,30 +19,36 @@ import {
   useExtensionInput,
   View,
   Select,
+  Spinner,
+  Text,
+  CalloutBanner,
 } from "@shopify/post-purchase-ui-extensions-react";
-import { BOUTIQUES } from "./utils";
 
-/**
- * Entry point for the `ShouldRender` Extension Point.
- *
- * Returns a value indicating whether or not to render a PostPurchase step, and
- * optionally allows data to be stored on the client for use in the `Render`
- * extension point.
- */
-extend("Checkout::PostPurchase::ShouldRender", async ({ storage }) => {
-  const initialState = await getRenderData();
-  await storage.update(initialState);
-  return {
-    render: true,
-  };
-});
+const APP_URL =
+  "https://a430-2806-261-417-9ec8-f49f-b986-3603-3260.ngrok-free.app";
 
-// Simulate results of network call, etc.
-async function getRenderData() {
-  return {
-    couldBe: "anything",
-  };
-}
+extend(
+  "Checkout::PostPurchase::ShouldRender",
+  async ({ storage, inputData }) => {
+    console.log("inputData", inputData.shop.domain);
+    const boutiquesByStore = await fetch(
+      `${APP_URL}/dashboard/stores/${inputData.shop.domain}`,
+      {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+          "ngrok-skip-browser-warning": "false",
+        },
+      }
+    ).then((response) => response.json());
+
+    await storage.update(boutiquesByStore);
+
+    return {
+      render: true,
+    };
+  }
+);
 
 /**
  * Entry point for the `Render` Extension Point
@@ -53,17 +59,28 @@ async function getRenderData() {
  */
 render("Checkout::PostPurchase::Render", () => <App />);
 
-// Top-level React component
 export function App() {
-  const { storage, inputData, calculateChangeset, applyChangeset, done } =
-    useExtensionInput();
-  console.log(storage);
+  const { storage, inputData, done } = useExtensionInput();
+  const [loading, setLoading] = useState(false);
   const [ciudad, setCiudad] = useState("");
   const [boutique, setBoutique] = useState("");
   const [boutiquesSelected, setBoutiquestSelected] = useState([]);
+  const [localidades, setLocalidades] = useState([]);
 
   useEffect(() => {
-    const [filtered] = BOUTIQUES.filter(({ value }) => value === ciudad);
+    const locations = storage.initialData.map((place) => {
+      return {
+        label: place.location,
+        value: place.value,
+      };
+    });
+    setLocalidades(locations);
+  }, [storage.initialData]);
+
+  useEffect(() => {
+    const [filtered] = storage.initialData.filter(
+      ({ value }) => value === ciudad
+    );
     if (filtered && Array.isArray(filtered?.children)) {
       setBoutiquestSelected(filtered.children);
       setBoutique("");
@@ -71,14 +88,24 @@ export function App() {
   }, [ciudad]);
 
   async function onBoutiqueChange(value) {
+    setLoading(true);
     setBoutique(value);
-    // const result = await editNote({
-    //   type: "updateNote",
-    //   note: `Boutique: ${value}`,
-    // });
-    // if (result.type === "success") {
-    //   setShowToast(true);
-    // }
+    await fetch(
+      `${APP_URL}/api/v1/webhook/shopify/public/public/setcomment/${inputData.shop.domain}`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "ngrok-skip-browser-warning": "false",
+        },
+        body: JSON.stringify({
+          value,
+          shop: inputData.shop,
+          initialPurchase: inputData.initialPurchase,
+        }),
+      }
+    ).then((response) => response.json());
+    done();
   }
 
   return (
@@ -101,46 +128,33 @@ export function App() {
             <Select
               label="Selecciona la ciudad"
               value={ciudad}
-              options={[
-                {
-                  value: "zapopan",
-                  label: "Zapopan",
-                },
-                {
-                  value: "guadalajara",
-                  label: "Guadalajara",
-                },
-                {
-                  value: "cdmx",
-                  label: "CDMX",
-                },
-                {
-                  value: "puerto_cancun",
-                  label: "Puerto Cancún",
-                },
-                {
-                  value: "culiacan",
-                  label: "Culiacán",
-                },
-              ]}
+              options={localidades}
               onChange={(value) => setCiudad(value)}
             />
           </View>
-          <View padding="base" blockPadding="loose">
-            {/* Content */}
-            {boutiquesSelected.map((obj, i) => (
-              <View blockPadding="base">
-                <Radio
-                  id={`${obj.name} - ${obj.direction}`}
-                  key={`${obj.name}_${i}_check`}
-                  name="boutique"
-                  onChange={() => onBoutiqueChange(obj)}
-                >
-                  {`${obj.name} - ${obj.direction}`}
-                </Radio>
-              </View>
-            ))}
-          </View>
+          {loading ? (
+            <View padding="base" blockPadding="loose">
+              <CalloutBanner title="Enviando información">
+                <Text>Por favor espere un momento...</Text>
+              </CalloutBanner>
+            </View>
+          ) : (
+            <View padding="base" blockPadding="loose">
+              {/* Content */}
+              {boutiquesSelected.map((obj, i) => (
+                <View blockPadding="base" key={`${obj.name}_${i}_option`}>
+                  <Radio
+                    id={`${obj.name} - ${obj.direction}`}
+                    key={`${obj.name}_${i}_check`}
+                    name="boutique"
+                    onChange={() => onBoutiqueChange(obj)}
+                  >
+                    {`${obj.name} - ${obj.direction}`}
+                  </Radio>
+                </View>
+              ))}
+            </View>
+          )}
         </View>
       </Layout>
     </BlockStack>
