@@ -19,7 +19,6 @@ import {
   useExtensionInput,
   View,
   Select,
-  Spinner,
   Text,
   CalloutBanner,
 } from "@shopify/post-purchase-ui-extensions-react";
@@ -153,6 +152,14 @@ export function App() {
                   </Radio>
                 </View>
               ))}
+            </View>
+          )}
+
+          {!loading && (
+            <View padding="base" alignment="center" blockPadding="base">
+              <Button plain onClick={() => done()}>
+                No estoy interesado, continuar con la compra
+              </Button>
             </View>
           )}
         </View>
