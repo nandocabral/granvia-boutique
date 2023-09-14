@@ -23,8 +23,7 @@ import {
   CalloutBanner,
 } from "@shopify/post-purchase-ui-extensions-react";
 
-const APP_URL =
-  "https://a430-2806-261-417-9ec8-f49f-b986-3603-3260.ngrok-free.app";
+const APP_URL = "https://api.gvweb.com.mx";
 
 extend(
   "Checkout::PostPurchase::ShouldRender",
